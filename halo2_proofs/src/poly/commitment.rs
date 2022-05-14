@@ -22,9 +22,10 @@ pub use prover::create_proof;
 pub use verifier::{verify_proof, Accumulator, Guard};
 
 use std::io;
+use serde::{Serialize, Deserialize};
 
 /// These are the public parameters for the polynomial commitment scheme.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Params<C: CurveAffine> {
     pub(crate) k: u32,
     pub(crate) n: u64,

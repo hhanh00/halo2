@@ -5,10 +5,17 @@ use std::{
     convert::TryFrom,
     ops::{Neg, Sub},
 };
+use std::fmt::Formatter;
+use std::marker::PhantomData;
 
 use super::{lookup, permutation, Assigned, Error};
 use crate::circuit::Layouter;
 use crate::{circuit::Region, poly::Rotation};
+
+use std::collections::HashMap;
+use serde::{Serialize, Deserialize, Deserializer, de};
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 
 mod compress_selectors;
 
@@ -19,7 +26,7 @@ pub trait ColumnType:
 }
 
 /// A column with an index and type
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Column<C: ColumnType> {
     index: usize,
     column_type: C,
@@ -60,19 +67,19 @@ impl<C: ColumnType> PartialOrd for Column<C> {
 }
 
 /// An advice column
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Advice;
 
 /// A fixed column
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Fixed;
 
 /// An instance column
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Instance;
 
 /// An enum over the Advice, Fixed, Instance structs
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Any {
     /// An Advice variant
     Advice,
@@ -247,7 +254,7 @@ impl TryFrom<Column<Any>> for Column<Instance> {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Selector(pub(crate) usize, bool);
 
 impl Selector {
@@ -442,7 +449,7 @@ pub trait Circuit<F: Field> {
 }
 
 /// Low-degree expression representing an identity that must hold over the committed columns.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Expression<F> {
     /// This is a constant polynomial
     Constant(F),
@@ -713,7 +720,7 @@ pub(crate) struct PointIndex(pub usize);
 
 /// A "virtual cell" is a PLONK cell that has been queried at a particular relative offset
 /// within a custom gate.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct VirtualCell {
     pub(crate) column: Column<Any>,
     pub(crate) rotation: Rotation,
@@ -837,7 +844,7 @@ impl<F: Field, C: Into<Constraint<F>>, Iter: IntoIterator<Item = C>> IntoIterato
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub(crate) struct Gate<F: Field> {
     name: &'static str,
     constraint_names: Vec<&'static str>,
@@ -846,6 +853,49 @@ pub(crate) struct Gate<F: Field> {
     /// trigger debug checks on gates.
     queried_selectors: Vec<Selector>,
     queried_cells: Vec<VirtualCell>,
+}
+
+impl <'de, F: Field + Deserialize<'de>> Deserialize<'de> for Gate<F> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Default)]
+        struct GateVisitor<F> { _p: PhantomData<F> }
+        impl<'de, F: Field + Deserialize<'de>> de::Visitor<'de> for GateVisitor<F> {
+            type Value = Gate<F>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("Gate")
+            }
+
+            fn visit_seq<V: de::SeqAccess<'de>>(self, mut seq: V) -> Result<Gate<F>, V::Error> {
+                let name: String = seq.next_element()?.unwrap();
+                let mut string_dictionary = STRING_INTERNING.lock().unwrap();
+                let name: &'static str = string_dictionary.entry(name.clone()).or_insert_with(|| {
+                    Box::leak(name.into_boxed_str())});
+                let constraint_names: Vec<String> = seq.next_element()?.unwrap();
+                let constraint_names: Vec<_> = constraint_names.into_iter().map(|name| {
+                    let name: &'static str = string_dictionary.entry(name.clone()).or_insert_with(|| {
+                        Box::leak(name.into_boxed_str())});
+                    name
+                }).collect();
+                let polys: Vec<Expression<F>> = seq.next_element()?.unwrap();
+                let queried_selectors: Vec<Selector> = seq.next_element()?.unwrap();
+                let queried_cells: Vec<VirtualCell> = seq.next_element()?.unwrap();
+                Ok(Gate {
+                    name,
+                    constraint_names,
+                    polys,
+                    queried_selectors,
+                    queried_cells,
+                })
+            }
+        }
+        deserializer.deserialize_struct("Gate", &["name", "constraint_names", "polys", "queried_selectors", "queried_cells"],
+            GateVisitor::<F>::default())
+    }
+}
+
+lazy_static! {
+    static ref STRING_INTERNING: Mutex<HashMap<String, &'static str>> = Mutex::new(HashMap::new());
 }
 
 impl<F: Field> Gate<F> {
@@ -872,7 +922,7 @@ impl<F: Field> Gate<F> {
 
 /// This is a description of the circuit environment, such as the gate, column and
 /// permutation arrangements.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintSystem<F: Field> {
     pub(crate) num_fixed_columns: usize,
     pub(crate) num_advice_columns: usize,
@@ -1160,7 +1210,7 @@ impl<F: Field> ConstraintSystem<F> {
         );
 
         self.gates.push(Gate {
-            name,
+            name: name,
             constraint_names,
             polys,
             queried_selectors,

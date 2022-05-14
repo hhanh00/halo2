@@ -18,6 +18,7 @@ pub mod multiopen;
 
 pub use domain::*;
 pub use evaluator::*;
+use serde::{Serialize, Deserialize};
 
 /// This is an error that could occur during proving or circuit synthesis.
 // TODO: these errors need to be cleaned up
@@ -50,7 +51,7 @@ impl Basis for ExtendedLagrangeCoeff {}
 
 /// Represents a univariate polynomial defined over a field and a particular
 /// basis.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Polynomial<F, B> {
     values: Vec<F>,
     _marker: PhantomData<B>,
@@ -228,7 +229,7 @@ impl<'a, F: Field, B: Basis> Mul<F> for Polynomial<F, B> {
 /// Describes the relative rotation of a vector. Negative numbers represent
 /// reverse (leftmost) rotations and positive numbers represent forward (rightmost)
 /// rotations. Zero represents no rotation.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Rotation(pub i32);
 
 impl Rotation {

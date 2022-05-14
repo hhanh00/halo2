@@ -10,9 +10,10 @@ pub(crate) mod prover;
 pub(crate) mod verifier;
 
 use std::io;
+use serde::{Serialize, Deserialize};
 
 /// A permutation argument.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Argument {
     /// A sequence of columns involved in the argument.
     columns: Vec<Column<Any>>,
@@ -73,13 +74,13 @@ impl Argument {
 }
 
 /// The verifying key for a single permutation argument.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct VerifyingKey<C: CurveAffine> {
     commitments: Vec<C>,
 }
 
 /// The proving key for a single permutation argument.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct ProvingKey<C: CurveAffine> {
     permutations: Vec<Polynomial<C::Scalar, LagrangeCoeff>>,
     polys: Vec<Polynomial<C::Scalar, Coeff>>,

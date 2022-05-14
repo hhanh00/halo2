@@ -34,10 +34,11 @@ pub use prover::*;
 pub use verifier::*;
 
 use std::io;
+use serde::{Serialize, Deserialize};
 
 /// This is a verifying key which allows for the verification of proofs for a
 /// particular circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VerifyingKey<C: CurveAffine> {
     domain: EvaluationDomain<C::Scalar>,
     fixed_commitments: Vec<C>,
@@ -95,7 +96,7 @@ pub struct PinnedVerificationKey<'a, C: CurveAffine> {
 }
 /// This is a proving key which allows for the creation of proofs for a
 /// particular circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProvingKey<C: CurveAffine> {
     vk: VerifyingKey<C>,
     l0: Polynomial<C::Scalar, ExtendedLagrangeCoeff>,
